@@ -29,6 +29,8 @@ OUTPUT_DIR = Path("outputs")
 UPLOAD_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+MAX_UPLOAD_BYTES = 500 * 1024 * 1024  # 500 MB
+
 # In-memory job store
 jobs: dict[str, dict] = {}
 
@@ -149,9 +151,23 @@ async def upload_file(
     job_id = str(uuid.uuid4())
     upload_path = UPLOAD_DIR / f"{job_id}{suffix}"
 
-    # Save upload
-    with open(upload_path, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    # Save upload, enforcing size limit
+    size = 0
+    try:
+        with open(upload_path, "wb") as f:
+            chunk_size = 1024 * 1024  # 1 MB
+            while chunk := file.file.read(chunk_size):
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    f.close()
+                    upload_path.unlink(missing_ok=True)
+                    raise HTTPException(413, f"File too large. Maximum allowed size is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.")
+                f.write(chunk)
+    except HTTPException:
+        raise
+    except Exception:
+        upload_path.unlink(missing_ok=True)
+        raise HTTPException(500, "Failed to save uploaded file.")
 
     jobs[job_id] = {
         "id": job_id,

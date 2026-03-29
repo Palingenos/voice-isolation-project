@@ -415,15 +415,19 @@
 
   function setStatus(status, error) {
     const label = STATUS_LABELS[status] || status;
+    statusText.innerHTML = '';
     if (status === 'done') {
       statusText.className = 'status-text done';
-      statusText.innerHTML = `&#10003; ${label}`;
+      statusText.textContent = '\u2713 ' + label;
     } else if (status === 'error') {
       statusText.className = 'status-text error';
-      statusText.innerHTML = `&#10007; ${error || 'Processing failed'}`;
+      statusText.textContent = '\u2717 ' + (error || 'Processing failed');
     } else {
       statusText.className = 'status-text processing';
-      statusText.innerHTML = `<span class="spinner"></span> ${label}`;
+      const spinner = document.createElement('span');
+      spinner.className = 'spinner';
+      statusText.appendChild(spinner);
+      statusText.appendChild(document.createTextNode(' ' + label));
     }
   }
 
