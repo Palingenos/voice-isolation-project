@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Isolation</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0d14;
+      --surface: #16161f;
+      --surface2: #1e1e2e;
+      --border: #2a2a3d;
+      --accent: #7c6af7;
+      --accent2: #a78bfa;
+      --text: #e2e2f0;
+      --muted: #6b6b8a;
+      --success: #4ade80;
+      --error: #f87171;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    header p {
+      color: var(--muted);
+      margin-top: 0.4rem;
+      font-size: 0.95rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 680px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 2.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    #drop-zone:hover, #drop-zone.drag-over {
+      border-color: var(--accent);
+      background: rgba(124,106,247,0.06);
+    }
+    #drop-zone svg {
+      width: 48px; height: 48px;
+      margin-bottom: 1rem;
+      color: var(--muted);
+    }
+    #drop-zone p { color: var(--muted); font-size: 0.9rem; }
+    #drop-zone strong { color: var(--text); }
+    #file-input { display: none; }
+
+    /* Options */
+    .options {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .options label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .options input[type=checkbox] {
+      width: 18px; height: 18px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Upload button */
+    #upload-btn {
+      margin-top: 1.5rem;
+      width: 100%;
+      padding: 0.85rem;
+      background: linear-gradient(135deg, var(--accent), #9b85f8);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    #upload-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    #upload-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    /* Status */
+    #status-section { margin-top: 2rem; display: none; }
+    .status-bar {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+    }
+    .status-label {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+    .status-text { font-weight: 600; }
+    .status-text.done { color: var(--success); }
+    .status-text.error { color: var(--error); }
+    .status-text.processing { color: var(--accent2); }
+
+    /* Spinner */
+    .spinner {
+      display: inline-block;
+      width: 14px; height: 14px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent2);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    #results-section { margin-top: 1.5rem; display: none; }
+
+    .section-title {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 0.75rem;
+    }
+
+    /* Audio player */
+    .audio-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+    .audio-block h3 { font-size: 0.95rem; margin-bottom: 0.75rem; }
+    audio { width: 100%; margin-bottom: 0.75rem; }
+
+    .download-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1rem;
+      color: var(--text);
+      font-size: 0.875rem;
+      text-decoration: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .download-btn:hover { border-color: var(--accent); }
+
+    /* Lyrics */
+    .lyrics-block {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem;
+    }
+    .lyrics-block h3 { font-size: 0.95rem; margin-bottom: 0.75rem; }
+
+    #lyrics-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.85rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    #lyrics-plain {
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.7;
+      color: var(--text);
+    }
+
+    #lyrics-timed { display: none; }
+    .segment {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+      align-items: baseline;
+    }
+    .segment:last-child { border-bottom: none; }
+    .seg-time {
+      min-width: 90px;
+      color: var(--accent2);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.78rem;
+    }
+    .seg-text { color: var(--text); }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.85rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      float: right;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    /* Reset */
+    #reset-btn {
+      margin-top: 1.5rem;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem 1.25rem;
+      color: var(--muted);
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    #reset-btn:hover { border-color: var(--error); color: var(--error); }
+
+    .filename-badge {
+      display: inline-block;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.5rem;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Voice Isolation</h1>
+  <p>Extract clean vocals from any audio or video file</p>
+</header>
+
+<div class="card">
+  <!-- Upload area -->
+  <div id="drop-zone">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round"
+        d="M9 9l3-3m0 0l3 3m-3-3v10M5.5 15.5A5.5 5.5 0 1 1 12 6"/>
+    </svg>
+    <p><strong>Drop your file here</strong> or click to browse</p>
+    <p style="margin-top:0.35rem">MP4, MP3, WAV, FLAC, OGG, M4A</p>
+    <span id="file-label" class="filename-badge" style="display:none"></span>
+    <input type="file" id="file-input" accept=".mp4,.mp3,.wav,.flac,.ogg,.m4a" />
+  </div>
+
+  <div class="options">
+    <label>
+      <input type="checkbox" id="lyrics-check" checked />
+      Generate lyrics automatically
+    </label>
+  </div>
+
+  <button id="upload-btn" disabled>Isolate Vocals</button>
+
+  <!-- Status -->
+  <div id="status-section">
+    <div class="status-bar">
+      <div class="status-label">Status</div>
+      <div class="status-text processing" id="status-text">
+        <span class="spinner"></span> Queued…
+      </div>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <div id="results-section">
+    <div class="audio-block">
+      <div class="section-title">Isolated Vocals</div>
+      <audio id="vocals-player" controls></audio>
+      <a id="vocals-download" class="download-btn" href="#" download>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+        </svg>
+        Download vocals.wav
+      </a>
+    </div>
+
+    <div class="lyrics-block" id="lyrics-block" style="display:none">
+      <div class="section-title">
+        Lyrics
+        <button class="copy-btn" id="copy-btn">Copy</button>
+      </div>
+      <div id="lyrics-tabs">
+        <button class="tab-btn active" data-tab="plain">Full text</button>
+        <button class="tab-btn" data-tab="timed">Timed</button>
+      </div>
+      <div id="lyrics-plain"></div>
+      <div id="lyrics-timed"></div>
+    </div>
+  </div>
+
+  <button id="reset-btn" style="display:none">Start over</button>
+</div>
+
+<script>
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+  const fileLabel = document.getElementById('file-label');
+  const uploadBtn = document.getElementById('upload-btn');
+  const lyricsCheck = document.getElementById('lyrics-check');
+  const statusSection = document.getElementById('status-section');
+  const statusText = document.getElementById('status-text');
+  const resultsSection = document.getElementById('results-section');
+  const vocalsPlayer = document.getElementById('vocals-player');
+  const vocalsDownload = document.getElementById('vocals-download');
+  const lyricsBlock = document.getElementById('lyrics-block');
+  const lyricsPlain = document.getElementById('lyrics-plain');
+  const lyricsTimed = document.getElementById('lyrics-timed');
+  const copyBtn = document.getElementById('copy-btn');
+  const resetBtn = document.getElementById('reset-btn');
+
+  let selectedFile = null;
+  let pollInterval = null;
+  let currentJobId = null;
+
+  const STATUS_LABELS = {
+    queued: 'Queued…',
+    extracting_audio: 'Extracting audio…',
+    separating_vocals: 'Separating vocals (this may take a few minutes)…',
+    generating_lyrics: 'Transcribing lyrics…',
+    done: 'Done',
+    error: 'Error',
+  };
+
+  // Drag & drop
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const f = e.dataTransfer.files[0];
+    if (f) setFile(f);
+  });
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(f) {
+    selectedFile = f;
+    fileLabel.textContent = f.name;
+    fileLabel.style.display = 'inline-block';
+    uploadBtn.disabled = false;
+  }
+
+  function fmt(sec) {
+    const m = Math.floor(sec / 60).toString().padStart(2, '0');
+    const s = (sec % 60).toFixed(1).padStart(4, '0');
+    return `${m}:${s}`;
+  }
+
+  function setStatus(status, error) {
+    const label = STATUS_LABELS[status] || status;
+    if (status === 'done') {
+      statusText.className = 'status-text done';
+      statusText.innerHTML = `&#10003; ${label}`;
+    } else if (status === 'error') {
+      statusText.className = 'status-text error';
+      statusText.innerHTML = `&#10007; ${error || 'Processing failed'}`;
+    } else {
+      statusText.className = 'status-text processing';
+      statusText.innerHTML = `<span class="spinner"></span> ${label}`;
+    }
+  }
+
+  function showResults(data) {
+    // Audio
+    vocalsPlayer.src = `/api/download/${currentJobId}/vocals`;
+    vocalsDownload.href = `/api/download/${currentJobId}/vocals`;
+
+    resultsSection.style.display = 'block';
+
+    // Lyrics
+    if (data.lyrics) {
+      lyricsPlain.textContent = data.lyrics;
+      lyricsBlock.style.display = 'block';
+
+      // Timed
+      lyricsTimed.innerHTML = '';
+      if (data.segments) {
+        data.segments.forEach(seg => {
+          const div = document.createElement('div');
+          div.className = 'segment';
+          div.innerHTML = `<span class="seg-time">${fmt(seg.start)} → ${fmt(seg.end)}</span><span class="seg-text">${escapeHtml(seg.text)}</span>`;
+          lyricsTimed.appendChild(div);
+        });
+      }
+    }
+
+    resetBtn.style.display = 'inline-block';
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      lyricsPlain.style.display = tab === 'plain' ? 'block' : 'none';
+      lyricsTimed.style.display = tab === 'timed' ? 'block' : 'none';
+    });
+  });
+
+  // Copy
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(lyricsPlain.textContent).then(() => {
+      copyBtn.textContent = 'Copied!';
+      setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+    });
+  });
+
+  // Upload
+  uploadBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+    uploadBtn.disabled = true;
+    statusSection.style.display = 'block';
+    resultsSection.style.display = 'none';
+    lyricsBlock.style.display = 'none';
+    resetBtn.style.display = 'none';
+    setStatus('queued');
+
+    const fd = new FormData();
+    fd.append('file', selectedFile);
+    fd.append('generate_lyrics', lyricsCheck.checked ? 'true' : 'false');
+
+    try {
+      const res = await fetch(`/api/upload?generate_lyrics=${lyricsCheck.checked}`, {
+        method: 'POST',
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Upload failed');
+      }
+      const { job_id } = await res.json();
+      currentJobId = job_id;
+      startPolling(job_id);
+    } catch (e) {
+      setStatus('error', e.message);
+      uploadBtn.disabled = false;
+      resetBtn.style.display = 'inline-block';
+    }
+  });
+
+  function startPolling(jobId) {
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/status/${jobId}`);
+        const data = await res.json();
+        setStatus(data.status, data.error);
+        if (data.status === 'done') {
+          clearInterval(pollInterval);
+          showResults(data);
+        } else if (data.status === 'error') {
+          clearInterval(pollInterval);
+          uploadBtn.disabled = false;
+          resetBtn.style.display = 'inline-block';
+        }
+      } catch (e) {
+        // network blip, keep polling
+      }
+    }, 2000);
+  }
+
+  // Reset
+  resetBtn.addEventListener('click', () => {
+    if (pollInterval) clearInterval(pollInterval);
+    selectedFile = null;
+    currentJobId = null;
+    fileInput.value = '';
+    fileLabel.style.display = 'none';
+    fileLabel.textContent = '';
+    uploadBtn.disabled = true;
+    statusSection.style.display = 'none';
+    resultsSection.style.display = 'none';
+    lyricsBlock.style.display = 'none';
+    resetBtn.style.display = 'none';
+    lyricsPlain.textContent = '';
+    lyricsTimed.innerHTML = '';
+    vocalsPlayer.src = '';
+  });
+</script>
+</body>
+</html>
